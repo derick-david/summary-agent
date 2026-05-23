@@ -15,7 +15,7 @@ on:
       branch:
         description: 'Odoo Branch to pull from (e.g. 17.0, 16.0, master)'
         required: true
-        default: '17.0'
+        default: '18.0'
       lookback_days:
         description: 'Number of lookback days'
         required: true
