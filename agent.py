@@ -139,8 +139,10 @@ def fetch_merged_prs(repo, branch, lookback_days, github_token, official_mergers
                 commit_author = commit_obj.get("author") if commit_obj else None
                 author = commit_author.get("name", "Unknown") if commit_author else "Unknown"
                 
-            # Filter bot noise
-            if author == "fw-bot" or title.upper().startswith("[FW]") or title.upper().startswith("FW "):
+            # Filter translation PRs immediately at the parsing level to save tokens and resources.
+            # We preserve forward-ports (FW) and backports since they contain valuable code updates.
+            title_upper = title.upper()
+            if title_upper.startswith("[I18N]") or "[I18N]" in title_upper:
                 continue
                 
             pr_list.append({
@@ -183,6 +185,32 @@ def generate_summary_with_gemini(prs, target_modules, gemini_api_key):
     
     target_modules_str = ", ".join(target_modules)
     
+    # Categorize PRs in Python to construct a dynamic, highly targeted system prompt
+    has_imp = False
+    has_fix = False
+    has_ref = False
+    
+    for pr in prs:
+        tags, modules = parse_pr_title(pr["title"])
+        tags_upper = [t.upper() for t in tags]
+        
+        if any(t in tags_upper for t in ["IMP", "ADD", "FEAT", "NEW"]):
+            has_imp = True
+        elif any(t in tags_upper for t in ["REF", "REV", "MOVE", "PERF"]):
+            has_ref = True
+        else:
+            has_fix = True
+            
+    categories_list = []
+    if has_imp:
+        categories_list.append("   - **[IMP]** (Improvements/Features)")
+    if has_fix:
+        categories_list.append("   - **[FIX]** (Bug Fixes)")
+    if has_ref:
+        categories_list.append("   - **[REF]** (Refactoring)")
+        
+    categories_str = "\n".join(categories_list)
+    
     system_instruction = (
         "You are an Odoo Technical Lead briefing your development team on Discord.\n"
         "Your task is to summarize the list of merged Pull Requests.\n"
@@ -190,13 +218,12 @@ def generate_summary_with_gemini(prs, target_modules, gemini_api_key):
         "1. Start the message with a friendly greeting header: '## 🚀 Monday Morning Odoo Updates'\n"
         f"2. Focus strictly on these target modules: {target_modules_str}. Ignore updates to other modules.\n"
         "3. Categorize the updates under these headings:\n"
-        "   - **[IMP]** (Improvements/Features)\n"
-        "   - **[FIX]** (Bug Fixes)\n"
-        "   - **[REF]** (Refactoring)\n"
+        f"{categories_str}\n"
         "4. Ignore [I18N] (Translations) completely.\n"
         "5. Output clean, chat-friendly Discord Markdown. Use bolding for module names (e.g., **account**, **sale**).\n"
         "6. Keep bullet points extremely short, direct, and developer-focused.\n"
-        "7. STRICT CHARACTER CONSTRAINT: The total summary MUST be under 1,800 characters to fit inside Discord's 2,000-character limit."
+        "7. STRICT CHARACTER CONSTRAINT: The total summary MUST be under 1,800 characters to fit inside Discord's 2,000-character limit.\n"
+        "8. Do not list any category that is not explicitly defined in Rule 3."
     )
     
     user_prompt = (
@@ -213,16 +240,31 @@ def generate_summary_with_gemini(prs, target_modules, gemini_api_key):
         from google.genai import types
         print("Using standard google-genai library...")
         client = genai.Client(api_key=gemini_api_key)
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.2,
-                max_output_tokens=1000
+        
+        # Try gemini-2.5-flash first
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    temperature=0.2,
+                    max_output_tokens=1000
+                )
             )
-        )
-        return response.text
+            return response.text
+        except Exception as e25:
+            print(f"⚠️ gemini-2.5-flash unavailable ({e25}). Trying gemini-1.5-flash...")
+            response = client.models.generate_content(
+                model="gemini-1.5-flash",
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    temperature=0.2,
+                    max_output_tokens=1000
+                )
+            )
+            return response.text
     except Exception as sdk1_err:
         print(f"⚠️ google-genai not available or failed: {sdk1_err}. Trying google-generativeai...")
         
@@ -253,8 +295,14 @@ def generate_summary_with_gemini(prs, target_modules, gemini_api_key):
                 }
                 headers = {"Content-Type": "application/json"}
                 resp = requests.post(url, json=payload, headers=headers)
-                resp.raise_for_status()
                 
+                # If 503 or failed, fallback to gemini-1.5-flash
+                if resp.status_code != 200:
+                    print(f"⚠️ REST gemini-2.5-flash failed with status {resp.status_code}. Trying gemini-1.5-flash...")
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_api_key}"
+                    resp = requests.post(url, json=payload, headers=headers)
+                    
+                resp.raise_for_status()
                 resp_json = resp.json()
                 text = resp_json["candidates"][0]["content"]["parts"][0]["text"]
                 return text
