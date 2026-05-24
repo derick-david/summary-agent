@@ -253,7 +253,6 @@ def send_to_discord(content, webhook_url):
 # =====================================================================
 def main():
     parser = argparse.ArgumentParser(description='Odoo Monday Morning Summary Agent')
-    parser.add_argument('--dry-run', action='store_true', help='Execute the agent in Dry-Run mode without calling Discord.')
     parser.add_argument('--branch', type=str, default=None, help='Odoo branch to query.')
     parser.add_argument('--days', type=int, default=None, help='Lookback period in days.')
     parser.add_argument('--modules', type=str, default=None, help='Comma-separated list of target modules.')
@@ -333,13 +332,10 @@ def main():
         summary = summary[:1990] + "..."
 
     # 5. Distribution
-    if args.dry_run:
-        print("🔬 DRY-RUN mode active. Skipping Discord webhook submission.")
-    else:
-        if not discord_webhook:
-            print("❌ Exiting: DISCORD_WEBHOOK_URL environment variable is missing.")
-            sys.exit(1)
-        send_to_discord(summary, discord_webhook)
+    if not discord_webhook:
+        print("❌ Exiting: DISCORD_WEBHOOK_URL environment variable is missing.")
+        sys.exit(1)
+    send_to_discord(summary, discord_webhook)
 
 if __name__ == "__main__":
     main()

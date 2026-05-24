@@ -24,11 +24,6 @@ on:
         description: 'Comma-separated target modules'
         required: true
         default: 'account,sale,point_of_sale,stock,base'
-      dry_run:
-        description: 'Dry Run? (true/false)'
-        type: boolean
-        required: true
-        default: false
 
 jobs:
   summary_job:
@@ -63,10 +58,5 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       run: |
-        DRY_RUN_ARG=""
-        if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-          DRY_RUN_ARG="--dry-run"
-        fi
-        
         # Execute the python script with dynamically injected variables
-        python agent.py $DRY_RUN_ARG
+        python odoo_summary.py
