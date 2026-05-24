@@ -130,11 +130,14 @@ def fetch_merged_prs(repo, branch, lookback_days, github_token, official_mergers
                 body_lines.append(line)
             body = "\n".join(body_lines).strip()
             
-            # Extract Author
-            author = commit_data.get("author", {}).get("login", "")
+            # Extract Author safely (handle cases where 'author' or 'commit' is None or unlinked)
+            author_data = commit_data.get("author")
+            author = author_data.get("login", "") if author_data else ""
             if not author:
                 # Fallback to commit author name if github account is not linked
-                author = commit_data.get("commit", {}).get("author", {}).get("name", "Unknown")
+                commit_obj = commit_data.get("commit")
+                commit_author = commit_obj.get("author") if commit_obj else None
+                author = commit_author.get("name", "Unknown") if commit_author else "Unknown"
                 
             # Filter bot noise
             if author == "fw-bot" or title.upper().startswith("[FW]") or title.upper().startswith("FW "):
