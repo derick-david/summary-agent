@@ -255,10 +255,18 @@ def send_to_teams(content, webhook_url):
     """
     Sends the generated summary to the configured Microsoft Teams webhook.
     """
-    # Microsoft Teams webhooks accept a standard JSON payload with a 'text' key.
-    # Supported markdown: basic bolding, italics, links, and bullet points.
+    # Modern Teams Workflows app Incoming Webhook template expects a valid Adaptive Card JSON.
     payload = {
-        "text": content
+        "type": "AdaptiveCard",
+        "body": [
+            {
+                "type": "TextBlock",
+                "text": content,
+                "wrap": True
+            }
+        ],
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "version": "1.4"
     }
     
     print("Sending update to Microsoft Teams...")
