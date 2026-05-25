@@ -244,7 +244,31 @@ def send_to_discord(content, webhook_url):
         print("🎉 Summary successfully posted to Discord!")
     except Exception as e:
         print(f"❌ Failed to send message to Discord: {e}")
-        if response is not None:
+        if 'response' in locals() and response is not None:
+            print(f"   Response Body: {response.text}")
+        raise e
+
+# =====================================================================
+# Microsoft Teams Distribution
+# =====================================================================
+def send_to_teams(content, webhook_url):
+    """
+    Sends the generated summary to the configured Microsoft Teams webhook.
+    """
+    # Microsoft Teams webhooks accept a standard JSON payload with a 'text' key.
+    # Supported markdown: basic bolding, italics, links, and bullet points.
+    payload = {
+        "text": content
+    }
+    
+    print("Sending update to Microsoft Teams...")
+    try:
+        response = requests.post(webhook_url, json=payload)
+        response.raise_for_status()
+        print("🎉 Summary successfully posted to Microsoft Teams!")
+    except Exception as e:
+        print(f"❌ Failed to send message to Microsoft Teams: {e}")
+        if 'response' in locals() and response is not None:
             print(f"   Response Body: {response.text}")
         raise e
 
@@ -274,6 +298,7 @@ def main():
 
     github_token = os.getenv("GITHUB_TOKEN")
     discord_webhook = os.getenv("DISCORD_WEBHOOK_URL")
+    teams_webhook = os.getenv("TEAMS_WEBHOOK_URL")
 
     print("====================================================")
     print("🤖 Starting Odoo Monday Morning Summary Agent")
@@ -332,10 +357,15 @@ def main():
         summary = summary[:1990] + "..."
 
     # 5. Distribution
-    if not discord_webhook:
-        print("❌ Exiting: DISCORD_WEBHOOK_URL environment variable is missing.")
+    if not discord_webhook and not teams_webhook:
+        print("❌ Exiting: Both DISCORD_WEBHOOK_URL and TEAMS_WEBHOOK_URL environment variables are missing.")
         sys.exit(1)
-    send_to_discord(summary, discord_webhook)
+        
+    if discord_webhook:
+        send_to_discord(summary, discord_webhook)
+        
+    if teams_webhook:
+        send_to_teams(summary, teams_webhook)
 
 if __name__ == "__main__":
     main()
