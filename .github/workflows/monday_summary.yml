@@ -7,7 +7,7 @@ on:
     # To change when this runs (e.g. daily, or on different hours), modify this cron string.
     # Cron format: [minute] [hour] [day of month] [month] [day of week]
     # '0 8 * * 1' means: 0th minute, 8th hour, any day of month, any month, day 1 (Monday).
-    - cron: '0  * * 1'
+    - cron: '0 0 * * 1'
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
